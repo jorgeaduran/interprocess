@@ -82,10 +82,27 @@ impl Into<SECURITY_DESCRIPTOR>  for SecurityDescriptor {
             Revision: self.revision,
             Sbz1: self.sbz1,
             Control: self.control,
-            Owner: self.owner as *mut _,
-            Group: self.group as *mut _,
-            Sacl: self.sacl as *mut _,
-            Dacl: self.dacl as *mut _,
+
+            Owner: if self.owner == 0 {
+                std::ptr::null_mut()
+            } else {
+                self.owner as *mut _
+            } ,
+            Group: if self.group == 0{
+                std::ptr::null_mut()
+            } else {
+                self.group as *mut _
+            },
+            Sacl:if self.sacl == 0{
+                std::ptr::null_mut()
+            } else {
+                self.sacl as *mut _
+            },
+            Dacl: if self.dacl == 0{
+                std::ptr::null_mut()
+            } else {
+                self.dacl as *mut _
+            },
         }
     }
 }
