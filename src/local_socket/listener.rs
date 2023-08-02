@@ -107,6 +107,12 @@ impmod! {local_socket,
 pub struct LocalSocketListener(LocalSocketListenerImpl);
 impl LocalSocketListener {
     /// Creates a socket server with the specified local socket name.
+    #[cfg(target_os = "windows")]
+    pub fn bind<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
+        LocalSocketListenerImpl::bind(name, crate::os::windows::security_descriptor::SecurityAttributes::default()).map(Self)
+    }
+    /// Creates a socket server with the specified local socket name.
+    #[cfg(not(target_os = "windows"))]
     pub fn bind<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
         LocalSocketListenerImpl::bind(name).map(Self)
     }

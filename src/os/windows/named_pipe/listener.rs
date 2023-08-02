@@ -1,5 +1,5 @@
 use super::{path_conversion, pipe_mode, PipeMode, PipeModeTag, PipeStream, PipeStreamRole, RawPipeStream};
-use crate::os::windows::{c_wrappers::init_security_attributes, winprelude::*, FileHandle};
+use crate::os::windows::{winprelude::*, FileHandle};
 use std::{
     borrow::Cow,
     ffi::OsStr,
@@ -25,6 +25,7 @@ use winapi::{
         },
     },
 };
+use crate::os::windows::security_descriptor::SecurityAttributes;
 
 /// The server for a named pipe, listening for connections to clients and producing pipe streams.
 ///
@@ -153,6 +154,8 @@ pub struct PipeListenerOptions<'a> {
     /// The default timeout clients use when connecting. Used unless another timeout is specified when waiting by a client.
     // TODO use WaitTimeout struct
     pub wait_timeout: NonZeroU32,
+
+    pub security_attributes:  SecurityAttributes
 }
 macro_rules! genset {
     ($name:ident : $ty:ty) => {
@@ -185,6 +188,7 @@ impl<'a> PipeListenerOptions<'a> {
             input_buffer_size_hint: 512,
             output_buffer_size_hint: 512,
             wait_timeout: NonZeroU32::new(50).unwrap(),
+            security_attributes: SecurityAttributes::default()
         }
     }
     /// Clones configuration options which are not owned by value and returns a copy of the original option table which is guaranteed not to borrow anything and thus ascribes to the `'static` lifetime.
@@ -204,6 +208,7 @@ impl<'a> PipeListenerOptions<'a> {
             input_buffer_size_hint: self.input_buffer_size_hint,
             output_buffer_size_hint: self.output_buffer_size_hint,
             wait_timeout: self.wait_timeout,
+            security_attributes: self.security_attributes.clone(),
         }
     }
     genset!(
@@ -216,7 +221,9 @@ impl<'a> PipeListenerOptions<'a> {
         input_buffer_size_hint: DWORD,
         output_buffer_size_hint: DWORD,
         wait_timeout: NonZeroU32,
+        security_attributes: SecurityAttributes
     );
+
     /// Creates an instance of a pipe for a listener with the specified stream type and with the first-instance flag set to the specified value.
     pub(super) fn create_instance(
         &self,

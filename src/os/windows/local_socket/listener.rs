@@ -4,17 +4,19 @@ use crate::{
     os::windows::named_pipe::{pipe_mode, PipeListener as GenericPipeListener, PipeListenerOptions, PipeMode},
 };
 use std::io;
+use crate::os::windows::security_descriptor::SecurityAttributes;
 
 type PipeListener = GenericPipeListener<pipe_mode::Bytes, pipe_mode::Bytes>;
 
 #[derive(Debug)]
 pub struct LocalSocketListener(PipeListener);
 impl LocalSocketListener {
-    pub fn bind<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
+    pub fn bind<'a>(name: impl ToLocalSocketName<'a>, security_attributes: SecurityAttributes) -> io::Result<Self> {
         let name = name.to_local_socket_name()?;
         let inner = PipeListenerOptions::new()
             .name(name.into_inner())
             .mode(PipeMode::Bytes)
+            .security_attributes(security_attributes)
             .create()?;
         Ok(Self(inner))
     }
