@@ -239,9 +239,9 @@ cannot create pipe server that has byte type but reads messages – have you for
         let open_mode = self.open_mode(first, role, overlapped);
         let pipe_mode = self.pipe_mode(read_mode, nonblocking);
 
-        let mut sa = init_security_attributes();
-        sa.bInheritHandle = 0;
-        // TODO security descriptor
+        // let mut sa = init_security_attributes();
+        // sa.bInheritHandle = 0;
+        // // TODO security descriptor
 
         let max_instances = match self.instance_limit.map(NonZeroU8::get) {
             Some(255) => {
@@ -254,6 +254,8 @@ cannot create pipe server that has byte type but reads messages – have you for
             None => 255,
         };
 
+
+        // let security = SecurityAttributes::any();
         let (handle, success) = unsafe {
             let handle = CreateNamedPipeW(
                 path.as_ptr(),
@@ -263,7 +265,7 @@ cannot create pipe server that has byte type but reads messages – have you for
                 self.output_buffer_size_hint,
                 self.input_buffer_size_hint,
                 self.wait_timeout.get(),
-                &mut sa as *mut _,
+                &mut self.security_attributes.clone().into() as *mut _,
             );
             (handle, handle != INVALID_HANDLE_VALUE)
         };

@@ -24,6 +24,7 @@ mod winprelude {
 use winprelude::*;
 
 mod c_wrappers;
+pub mod security_descriptor;
 
 /// Objects which own handles which can be shared with another processes.
 ///
