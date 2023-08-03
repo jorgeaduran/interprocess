@@ -109,7 +109,17 @@ impl LocalSocketListener {
     /// Creates a socket server with the specified local socket name.
     #[cfg(target_os = "windows")]
     pub fn bind<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
-        LocalSocketListenerImpl::bind(name, crate::os::windows::security_descriptor::SecurityAttributes::default()).map(Self)
+        LocalSocketListenerImpl::bind(name, None).map(Self)
+    }
+    /// Creates a socket server with the specified local socket name.
+    #[cfg(not(target_os = "windows"))]
+    pub fn bind<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
+        LocalSocketListenerImpl::bind(name).map(Self)
+    }
+    /// Creates a socket server with the specified local socket name.
+    #[cfg(target_os = "windows")]
+    pub fn bind_unsafe<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
+        LocalSocketListenerImpl::bind(name, Some(crate::os::windows::security_descriptor::SecurityAttributes::any())).map(Self)
     }
     /// Creates a socket server with the specified local socket name.
     #[cfg(not(target_os = "windows"))]

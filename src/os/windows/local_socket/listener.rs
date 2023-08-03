@@ -11,7 +11,7 @@ type PipeListener = GenericPipeListener<pipe_mode::Bytes, pipe_mode::Bytes>;
 #[derive(Debug)]
 pub struct LocalSocketListener(PipeListener);
 impl LocalSocketListener {
-    pub fn bind<'a>(name: impl ToLocalSocketName<'a>, security_attributes: SecurityAttributes) -> io::Result<Self> {
+    pub fn bind<'a>(name: impl ToLocalSocketName<'a>, security_attributes: Option<SecurityAttributes>) -> io::Result<Self> {
         let name = name.to_local_socket_name()?;
         let inner = PipeListenerOptions::new()
             .name(name.into_inner())

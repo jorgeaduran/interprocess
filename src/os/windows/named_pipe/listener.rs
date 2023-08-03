@@ -1,5 +1,5 @@
 use super::{path_conversion, pipe_mode, PipeMode, PipeModeTag, PipeStream, PipeStreamRole, RawPipeStream};
-use crate::os::windows::{winprelude::*, FileHandle};
+use crate::os::windows::{c_wrappers::init_security_attributes, winprelude::*, FileHandle};
 use std::{
     borrow::Cow,
     ffi::OsStr,
@@ -155,7 +155,7 @@ pub struct PipeListenerOptions<'a> {
     // TODO use WaitTimeout struct
     pub wait_timeout: NonZeroU32,
 
-    pub security_attributes:  SecurityAttributes
+    pub security_attributes:  Option<SecurityAttributes>
 }
 macro_rules! genset {
     ($name:ident : $ty:ty) => {
@@ -188,7 +188,7 @@ impl<'a> PipeListenerOptions<'a> {
             input_buffer_size_hint: 512,
             output_buffer_size_hint: 512,
             wait_timeout: NonZeroU32::new(50).unwrap(),
-            security_attributes: SecurityAttributes::default()
+            security_attributes: None
         }
     }
     /// Clones configuration options which are not owned by value and returns a copy of the original option table which is guaranteed not to borrow anything and thus ascribes to the `'static` lifetime.
@@ -221,7 +221,7 @@ impl<'a> PipeListenerOptions<'a> {
         input_buffer_size_hint: DWORD,
         output_buffer_size_hint: DWORD,
         wait_timeout: NonZeroU32,
-        security_attributes: SecurityAttributes
+        security_attributes: Option<SecurityAttributes>
     );
 
     /// Creates an instance of a pipe for a listener with the specified stream type and with the first-instance flag set to the specified value.
@@ -246,8 +246,8 @@ cannot create pipe server that has byte type but reads messages – have you for
         let open_mode = self.open_mode(first, role, overlapped);
         let pipe_mode = self.pipe_mode(read_mode, nonblocking);
 
-        // let mut sa = init_security_attributes();
-        // sa.bInheritHandle = 0;
+        let mut sa = init_security_attributes();
+        sa.bInheritHandle = 0;
         // // TODO security descriptor
 
         let max_instances = match self.instance_limit.map(NonZeroU8::get) {
@@ -262,24 +262,45 @@ cannot create pipe server that has byte type but reads messages – have you for
         };
 
 
-        // let security = SecurityAttributes::any();
-        let (handle, success) = unsafe {
-            let handle = CreateNamedPipeW(
-                path.as_ptr(),
-                open_mode,
-                pipe_mode,
-                max_instances,
-                self.output_buffer_size_hint,
-                self.input_buffer_size_hint,
-                self.wait_timeout.get(),
-                &mut self.security_attributes.clone().into() as *mut _,
-            );
-            (handle, handle != INVALID_HANDLE_VALUE)
-        };
-        ok_or_ret_errno!(success => unsafe {
+        if let Some(descriptor) = self.security_attributes.clone(){
+            let (handle, success) = unsafe {
+                let handle = CreateNamedPipeW(
+                    path.as_ptr(),
+                    open_mode,
+                    pipe_mode,
+                    max_instances,
+                    self.output_buffer_size_hint,
+                    self.input_buffer_size_hint,
+                    self.wait_timeout.get(),
+                    &mut descriptor.get_descriptor(),
+                );
+                (handle, handle != INVALID_HANDLE_VALUE)
+            };
+            ok_or_ret_errno!(success => unsafe {
             // SAFETY: we just made it and received ownership
             OwnedHandle::from_raw_handle(handle)
         })
+        } else{
+            let (handle, success) = unsafe {
+                let handle = CreateNamedPipeW(
+                    path.as_ptr(),
+                    open_mode,
+                    pipe_mode,
+                    max_instances,
+                    self.output_buffer_size_hint,
+                    self.input_buffer_size_hint,
+                    self.wait_timeout.get(),
+                    &mut sa as *mut _,
+                );
+                (handle, handle != INVALID_HANDLE_VALUE)
+            };
+            ok_or_ret_errno!(success => unsafe {
+            // SAFETY: we just made it and received ownership
+            OwnedHandle::from_raw_handle(handle)
+        })
+        }
+
+
     }
     /// Creates the pipe listener from the builder. The `Rm` and `Sm` generic arguments specify the type of pipe stream that the listener will create, thus determining the direction of the pipe and its mode.
     ///

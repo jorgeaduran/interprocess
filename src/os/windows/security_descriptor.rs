@@ -1,59 +1,79 @@
 use crate::os::windows::c_wrappers;
-use winapi::um::minwinbase::{SECURITY_ATTRIBUTES};
-use winapi::um::winnt::SECURITY_DESCRIPTOR;
-
-///
-///      let mut security_descriptor = winapi::um::winnt::SECURITY_DESCRIPTOR {
-//                 Revision: 1,
-//                 Sbz1: 0,
-//                 Control: 4,
-//                 Owner: std::ptr::null_mut(),
-//                 Group: std::ptr::null_mut(),
-//                 Sacl: std::ptr::null_mut(),
-//                 Dacl: std::ptr::null_mut(),
-//             };
-//             let mut security_attributes = winapi::um::minwinbase::SECURITY_ATTRIBUTES {
-//                 nLength: std::mem::size_of::<winapi::um::minwinbase::SECURITY_ATTRIBUTES>() as u32,
-//                 lpSecurityDescriptor: &mut security_descriptor as *mut winapi::um::winnt::SECURITY_DESCRIPTOR as *mut std::ffi::c_void,
-//                 bInheritHandle: 0, // 0 si no deseas heredar el descriptor
-//             };
-
+use crate::os::windows::LPVOID;
+use winapi::ctypes::c_void;
+use winapi::um::{
+    minwinbase::{SECURITY_ATTRIBUTES},
+    winnt::{SECURITY_DESCRIPTOR}
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SecurityAttributes {
-    inherit_handle: i32,
+    length: u32,
     descriptor: Option<SecurityDescriptor>,
+    inherit_handle: i32,
 }
 
 impl Into<SECURITY_ATTRIBUTES> for SecurityAttributes {
     fn into(self) -> SECURITY_ATTRIBUTES {
-
         let mut sa = c_wrappers::init_security_attributes();
         sa.bInheritHandle = self.inherit_handle;
-        if let Some(descriptor) = self.descriptor.clone() {
-            let mut security_descriptor: SECURITY_DESCRIPTOR = descriptor.into();
-            sa.lpSecurityDescriptor = &mut security_descriptor as *mut winapi::um::winnt::SECURITY_DESCRIPTOR as *mut std::ffi::c_void;
+
+        if let Some(descriptor) = &self.descriptor {
+            sa.lpSecurityDescriptor = descriptor as *const _ as *mut _;
+        } else {
+            sa.lpSecurityDescriptor = std::ptr::null_mut();
         }
+
         sa
+    }
+}
+impl SecurityAttributes {
+    pub fn get_descriptor(&self) -> SECURITY_ATTRIBUTES {
+        //TODO call crate::c_wrappers::obtain_secure_descriptor()
+        let mut security_descriptor: Box<SECURITY_DESCRIPTOR> = Box::new(SECURITY_DESCRIPTOR {
+            Revision: 1,
+            Sbz1: 0,
+            Control: 4,
+            Owner: std::ptr::null_mut(),
+            Group: std::ptr::null_mut(),
+            Sacl: std::ptr::null_mut(),
+            Dacl: std::ptr::null_mut(),
+        });
+
+        let mut security_attributes: SECURITY_ATTRIBUTES = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: security_descriptor.as_mut() as *mut _ as *mut std::ffi::c_void,
+            bInheritHandle: 0, // 0 si no deseas heredar el descriptor
+        };
+
+        security_attributes
+    }
+    pub fn any() -> Self {
+        Self {
+            length: 0,
+            descriptor: Some(SecurityDescriptor::any()),
+            inherit_handle: 0,
+        }
     }
 }
 
 impl Default for SecurityAttributes {
     fn default() -> Self {
-        SecurityAttributes {
+        Self {
+            length: 0,
+            descriptor: None,
             inherit_handle: 0,
-            descriptor: None
+            }
         }
     }
-}
-
 
 impl SecurityAttributes {
 
     pub fn with_descriptor(descriptor: SecurityDescriptor) -> Self {
         Self {
-            inherit_handle: 0,
+            length: 0,
             descriptor: Some(descriptor),
+            inherit_handle: 0,
         }
     }
 }
@@ -69,42 +89,10 @@ pub struct SecurityDescriptor {
     revision: u8,
     sbz1: u8,
     control: u16,
-    owner: usize,
-    group: usize,
-    g_group: usize,
-    sacl: usize,
-    dacl: usize,
-}
-
-impl Into<SECURITY_DESCRIPTOR>  for SecurityDescriptor {
-    fn into(self) -> SECURITY_DESCRIPTOR {
-        winapi::um::winnt::SECURITY_DESCRIPTOR {
-            Revision: self.revision,
-            Sbz1: self.sbz1,
-            Control: self.control,
-
-            Owner: if self.owner == 0 {
-                std::ptr::null_mut()
-            } else {
-                self.owner as *mut _
-            } ,
-            Group: if self.group == 0{
-                std::ptr::null_mut()
-            } else {
-                self.group as *mut _
-            },
-            Sacl:if self.sacl == 0{
-                std::ptr::null_mut()
-            } else {
-                self.sacl as *mut _
-            },
-            Dacl: if self.dacl == 0{
-                std::ptr::null_mut()
-            } else {
-                self.dacl as *mut _
-            },
-        }
-    }
+    owner: *mut c_void,
+    group: *mut c_void,
+    sacl: *mut c_void,
+    dacl: *mut c_void,
 }
 
 impl SecurityDescriptor {
@@ -113,11 +101,10 @@ impl SecurityDescriptor {
             revision: 1,
             sbz1: 0,
             control: 4,
-            owner: 0,
-            group: 0,
-            g_group: 0,
-            sacl: 0,
-            dacl: 0,
+            owner: std::ptr::null_mut(),
+            group: std::ptr::null_mut(),
+            sacl: std::ptr::null_mut(),
+            dacl: std::ptr::null_mut(),
         }
     }
 }
