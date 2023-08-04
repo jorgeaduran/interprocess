@@ -18,13 +18,15 @@ use to_method::To;
 use winapi::{
     shared::winerror::ERROR_PIPE_CONNECTED,
     um::{
+        winnt::CLAIM_SECURITY_ATTRIBUTE_V1,
         namedpipeapi::{ConnectNamedPipe, CreateNamedPipeW},
         winbase::{
             FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED, FILE_FLAG_WRITE_THROUGH, PIPE_NOWAIT,
-            PIPE_REJECT_REMOTE_CLIENTS,
+            PIPE_REJECT_REMOTE_CLIENTS
         },
     },
 };
+use winapi::um::minwinbase::SECURITY_ATTRIBUTES;
 use crate::os::windows::security_descriptor::SecurityAttributes;
 
 /// The server for a named pipe, listening for connections to clients and producing pipe streams.
@@ -155,7 +157,7 @@ pub struct PipeListenerOptions<'a> {
     // TODO use WaitTimeout struct
     pub wait_timeout: NonZeroU32,
 
-    pub security_attributes:  Option<SecurityAttributes>
+    pub security_attributes:  SecurityAttributes
 }
 macro_rules! genset {
     ($name:ident : $ty:ty) => {
@@ -188,7 +190,7 @@ impl<'a> PipeListenerOptions<'a> {
             input_buffer_size_hint: 512,
             output_buffer_size_hint: 512,
             wait_timeout: NonZeroU32::new(50).unwrap(),
-            security_attributes: None
+            security_attributes: SecurityAttributes::default()
         }
     }
     /// Clones configuration options which are not owned by value and returns a copy of the original option table which is guaranteed not to borrow anything and thus ascribes to the `'static` lifetime.
@@ -221,7 +223,7 @@ impl<'a> PipeListenerOptions<'a> {
         input_buffer_size_hint: DWORD,
         output_buffer_size_hint: DWORD,
         wait_timeout: NonZeroU32,
-        security_attributes: Option<SecurityAttributes>
+        security_attributes: SecurityAttributes
     );
 
     /// Creates an instance of a pipe for a listener with the specified stream type and with the first-instance flag set to the specified value.
@@ -246,8 +248,8 @@ cannot create pipe server that has byte type but reads messages – have you for
         let open_mode = self.open_mode(first, role, overlapped);
         let pipe_mode = self.pipe_mode(read_mode, nonblocking);
 
-        let mut sa = init_security_attributes();
-        sa.bInheritHandle = 0;
+        // let mut sa = init_security_attributes();
+        // sa.bInheritHandle = 0;
         // // TODO security descriptor
 
         let max_instances = match self.instance_limit.map(NonZeroU8::get) {
@@ -262,25 +264,8 @@ cannot create pipe server that has byte type but reads messages – have you for
         };
 
 
-        if let Some(descriptor) = self.security_attributes.clone(){
-            let (handle, success) = unsafe {
-                let handle = CreateNamedPipeW(
-                    path.as_ptr(),
-                    open_mode,
-                    pipe_mode,
-                    max_instances,
-                    self.output_buffer_size_hint,
-                    self.input_buffer_size_hint,
-                    self.wait_timeout.get(),
-                    &mut descriptor.get_descriptor(),
-                );
-                (handle, handle != INVALID_HANDLE_VALUE)
-            };
-            ok_or_ret_errno!(success => unsafe {
-            // SAFETY: we just made it and received ownership
-            OwnedHandle::from_raw_handle(handle)
-        })
-        } else{
+//        if let Some(descriptor) = self.security_attributes.clone(){
+        let mut sa :SECURITY_ATTRIBUTES = self.security_attributes.clone().into();
             let (handle, success) = unsafe {
                 let handle = CreateNamedPipeW(
                     path.as_ptr(),
@@ -298,7 +283,25 @@ cannot create pipe server that has byte type but reads messages – have you for
             // SAFETY: we just made it and received ownership
             OwnedHandle::from_raw_handle(handle)
         })
-        }
+        // } else{
+        //     let (handle, success) = unsafe {
+        //         let handle = CreateNamedPipeW(
+        //             path.as_ptr(),
+        //             open_mode,
+        //             pipe_mode,
+        //             max_instances,
+        //             self.output_buffer_size_hint,
+        //             self.input_buffer_size_hint,
+        //             self.wait_timeout.get(),
+        //             &mut sa as *mut _,
+        //         );
+        //         (handle, handle != INVALID_HANDLE_VALUE)
+        //     };
+        //     ok_or_ret_errno!(success => unsafe {
+        //     // SAFETY: we just made it and received ownership
+        //     OwnedHandle::from_raw_handle(handle)
+        // })
+        // }
 
 
     }

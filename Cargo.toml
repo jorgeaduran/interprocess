@@ -68,7 +68,7 @@ winapi = { version = "0.3", features = [
     "namedpipeapi",
     "accctrl",
     "securitybaseapi",
-    "aclapi"
+    "aclapi",
 ] }
 
 [target.'cfg(unix)'.dependencies]

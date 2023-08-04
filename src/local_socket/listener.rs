@@ -123,8 +123,8 @@ impl LocalSocketListener {
     }
     /// Creates a socket server with the specified local socket name.
     #[cfg(not(target_os = "windows"))]
-    pub fn bind<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
-        LocalSocketListenerImpl::bind(name).map(Self)
+    pub fn bind_unsafe<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
+        unimplemented!("This function is only available on Windows")
     }
     /// Listens for incoming connections to the socket, blocking until a client is connected.
     ///

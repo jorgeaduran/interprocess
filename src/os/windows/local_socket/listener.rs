@@ -13,10 +13,11 @@ pub struct LocalSocketListener(PipeListener);
 impl LocalSocketListener {
     pub fn bind<'a>(name: impl ToLocalSocketName<'a>, security_attributes: Option<SecurityAttributes>) -> io::Result<Self> {
         let name = name.to_local_socket_name()?;
+        let sa = security_attributes.unwrap_or_default();
         let inner = PipeListenerOptions::new()
             .name(name.into_inner())
             .mode(PipeMode::Bytes)
-            .security_attributes(security_attributes)
+            .security_attributes(sa)
             .create()?;
         Ok(Self(inner))
     }
