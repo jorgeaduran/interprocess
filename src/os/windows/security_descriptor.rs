@@ -3,7 +3,7 @@ use crate::os::windows::LPVOID;
 use winapi::ctypes::c_void;
 use winapi::um::{
     minwinbase::{SECURITY_ATTRIBUTES},
-    winnt::{SECURITY_DESCRIPTOR, ACL}
+    winnt::{SECURITY_DESCRIPTOR, ACL, PSID, PACL, SECURITY_DESCRIPTOR_CONTROL}
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -86,18 +86,31 @@ impl Into<SecurityAttributes> for SecurityDescriptor {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct SecurityDescriptor {
     revision: u8,
     sbz1: u8,
-    control: u16,
-    owner: *mut c_void,
-    group: *mut c_void,
-    sacl: *mut c_void,
-    dacl: *mut c_void,
+    control: SECURITY_DESCRIPTOR_CONTROL,
+    owner: PSID,
+    group: PSID,
+    sacl: PACL,
+    dacl: PACL,
 }
-
-impl SecurityDescriptor {
+pub type PISECURITY_DESCRIPTOR = *mut SECURITY_DESCRIPTOR;
+impl Clone for SecurityDescriptor {
+    fn clone(&self) -> Self {
+        Self {
+            revision: self.revision,
+            sbz1: self.sbz1,
+            control: self.control,
+            owner: self.owner,
+            group: self.group,
+            sacl: self.sacl,
+            dacl: self.dacl,
+        }
+    }
+}impl SecurityDescriptor {
     pub fn any() -> Self {
         Self {
             revision: 1,
