@@ -19,8 +19,7 @@ impl Into<SECURITY_ATTRIBUTES> for SecurityAttributes {
         sa.bInheritHandle = self.inherit_handle;
 
         if let Some(security_descriptor) = &self.descriptor {
-        let mut descriptor: Box<SECURITY_DESCRIPTOR> = Box::new(security_descriptor.clone().into());
-          sa.lpSecurityDescriptor = descriptor.as_mut() as *mut _ as *mut std::ffi::c_void;
+          sa.lpSecurityDescriptor = security_descriptor.into();
         } else {
             sa.lpSecurityDescriptor = std::ptr::null_mut();
         }
@@ -137,5 +136,11 @@ impl Into<SECURITY_DESCRIPTOR> for SecurityDescriptor {
             Sacl: self.sacl as *mut ACL,
             Dacl: self.dacl as *mut ACL,
         }
+    }
+}
+impl Into<*mut c_void> for &SecurityDescriptor {
+    fn into(self) -> *mut c_void {
+        // Aquí puedes convertir tu SecurityDescriptor en un puntero crudo como sea necesario
+        self as *const _ as *mut _
     }
 }
