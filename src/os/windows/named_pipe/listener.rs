@@ -274,11 +274,8 @@ cannot create pipe server that has byte type but reads messages – have you for
                 Sacl: std::ptr::null_mut(),
                 Dacl: std::ptr::null_mut(),
             };
-            println!("security_attributes: {:?}", self.security_attributes.attributes);
             sa.lpSecurityDescriptor = &mut security_descriptor as *mut winapi::um::winnt::SECURITY_DESCRIPTOR as *mut std::ffi::c_void ;
-        }
-
-             let (handle, success) = unsafe {
+            let (handle, success) = unsafe {
                 let handle = CreateNamedPipeW(
                     path.as_ptr(),
                     open_mode,
@@ -291,11 +288,32 @@ cannot create pipe server that has byte type but reads messages – have you for
                 );
                 (handle, handle != INVALID_HANDLE_VALUE)
             };
-
+            ok_or_ret_errno!(success => unsafe {
+            // SAFETY: we just made it and received ownership
+            OwnedHandle::from_raw_handle(handle)
+            })
+        } else{
+            let (handle, success) = unsafe {
+                let handle = CreateNamedPipeW(
+                    path.as_ptr(),
+                    open_mode,
+                    pipe_mode,
+                    max_instances,
+                    self.output_buffer_size_hint,
+                    self.input_buffer_size_hint,
+                    self.wait_timeout.get(),
+                    &mut sa,
+                );
+                (handle, handle != INVALID_HANDLE_VALUE)
+            };
             ok_or_ret_errno!(success => unsafe {
             // SAFETY: we just made it and received ownership
             OwnedHandle::from_raw_handle(handle)
         })
+        }
+
+
+
         // } else{
         //     let (handle, success) = unsafe {
         //         let handle = CreateNamedPipeW(
