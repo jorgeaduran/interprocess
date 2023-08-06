@@ -264,7 +264,6 @@ cannot create pipe server that has byte type but reads messages – have you for
             None => 255,
         };
 
-
         if let Some(_) = &self.security_attributes.attributes {
             let security_descriptor: winapi::um::winnt::PSECURITY_DESCRIPTOR = init_security_description();
             unsafe {
