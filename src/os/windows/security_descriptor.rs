@@ -51,42 +51,6 @@ impl Default for SecurityAttributes {
 }
 
 
-// impl SecurityAttributes {
-//     fn secure_descriptor(&self) -> SecurityDescriptor {
-//         SecurityDescriptor(self.attributes.security_descriptor)
-//     }
-// }
-
-// struct SecurityDescriptor {
-//     ptr: PSECURITY_DESCRIPTOR
-// }
-//
-impl SecurityDescriptor {
-    // fn as_mut_ptr(&mut self) -> PSECURITY_DESCRIPTOR {
-    //     self.ptr
-    // }
-    //
-    // fn as_ptr(&self) -> *const SECURITY_DESCRIPTOR {
-    //     self.ptr as *const SECURITY_DESCRIPTOR
-    // }
-    //
-    // fn get_mut(&mut self) -> &mut SECURITY_DESCRIPTOR {
-    //     self.ptr
-    // }
-    //
-    // fn group(&self) -> PACL {
-    //     self.get_mu
-    // }
-    //
-
-
-}
-
-// impl Into<SECURITY_ATTRIBUTES> for SecurityAttributes {
-//     fn into(self) -> SECURITY_ATTRIBUTES {
-//         c_wrappers::obtain_secure_descriptor()
-//     }
-// }
 impl SecurityAttributes {
     // pub fn get_descriptor(&self) -> SECURITY_ATTRIBUTES {
     //     self.clone().into()
@@ -125,50 +89,6 @@ impl SecurityAttributes {
             inherit_handle: 0,
         }
     }
-    // pub fn from_sddl(sddl: &str) -> SecurityDescriptorError<SECURITY_DESCRIPTOR> {
-    //     let sddl_wide: Vec<u16> = sddl.encode_utf16().collect();
-    //     let mut security_descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
-    //
-    //     let result = unsafe {
-    //         ConvertStringSecurityDescriptorToSecurityDescriptorW(
-    //             sddl_wide.as_ptr(),
-    //             SDDL_REVISION_1.into(),
-    //             &mut security_descriptor,
-    //             ptr::null_mut(), // Use null if you don't need the returned size
-    //         )
-    //     };
-    //
-    //     if result != 0 {
-    //         Ok(security_descriptor)
-    //     }
-    //     Err(anyhow!("Error converting SDDL to security descriptor"))
-    //
-    // }
-
-    fn as_sddl(sd: SECURITY_DESCRIPTOR) -> SecurityDescriptorError<String> {
-        let mut sddl: LPWSTR = ptr::null_mut();
-        let mut sddl_length: DWORD = 0;
-        let p_sd: PSECURITY_DESCRIPTOR = &sd as *const _ as PSECURITY_DESCRIPTOR;
-        let result = unsafe {
-            ConvertSecurityDescriptorToStringSecurityDescriptorW(
-                p_sd,
-                SDDL_REVISION_1.into(),
-                0, // Flags for specific components to convert. Use 0 for all.
-                &mut sddl,
-                &mut sddl_length,
-            )
-        };
-
-        if result != 0 {
-            let sddl_str = unsafe {
-                let slice = std::slice::from_raw_parts(sddl as *const u16, sddl_length as usize);
-                String::from_utf16_lossy(slice)
-            };
-            return Ok(sddl_str);
-        }
-        Err(anyhow!("Error converting security descriptor to SDDL"))
-    }
-
 
 }
 
@@ -219,7 +139,14 @@ impl Clone for SecurityDescriptor {
         }
     }
 }
+
+
 impl SecurityDescriptor {
+    /// Converts the security descriptor into a string representation.
+    ///
+    /// # Returns
+    ///
+    /// A string representation of the security descriptor.
     pub fn to_string(self) -> String {
         match SecurityAttributes::as_sddl(self.into()) {
             Ok(sddl) => {

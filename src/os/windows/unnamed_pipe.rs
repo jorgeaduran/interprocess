@@ -6,7 +6,7 @@
 
 // TODO add examples
 
-use super::{c_wrappers::init_security_attributes, winprelude::*, FileHandle};
+use super::{c_wrappers::init_security_attributes, c_wrappers::init_security_description, winprelude::*, FileHandle};
 use crate::{
     unnamed_pipe::{UnnamedPipeReader as PubReader, UnnamedPipeWriter as PubWriter},
     weaken_buf_init_mut,

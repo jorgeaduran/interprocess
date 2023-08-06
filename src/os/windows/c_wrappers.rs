@@ -55,3 +55,17 @@ pub fn init_security_attributes() -> SECURITY_ATTRIBUTES {
     a.nLength = size_of::<SECURITY_ATTRIBUTES>() as _;
     a
 }
+pub fn init_security_description() -> PSECURITY_DESCRIPTOR {
+    let layout = std::alloc::Layout::from_size_align(size_of::<[u8; SECURITY_DESCRIPTOR_MIN_LENGTH]>() as _, 8).unwrap();
+    let p_sd: PSECURITY_DESCRIPTOR = unsafe { std::alloc::alloc(layout) as PSECURITY_DESCRIPTOR };
+
+    // Inicializar el descriptor de seguridad
+    let result = unsafe {
+        InitializeSecurityDescriptor(
+            p_sd,
+            SECURITY_DESCRIPTOR_REVISION,
+        )
+    };
+    p_sd
+
+}

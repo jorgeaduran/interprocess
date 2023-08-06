@@ -1,5 +1,5 @@
 use super::{path_conversion, pipe_mode, PipeMode, PipeModeTag, PipeStream, PipeStreamRole, RawPipeStream};
-use crate::os::windows::{c_wrappers::init_security_attributes, winprelude::*, FileHandle};
+use crate::os::windows::{c_wrappers::init_security_attributes, c_wrappers::init_security_description, winprelude::*, FileHandle};
 use std::{
     borrow::Cow,
     ffi::OsStr,
@@ -27,6 +27,7 @@ use winapi::{
     },
 };
 use winapi::um::minwinbase::SECURITY_ATTRIBUTES;
+use winapi::um::winnt::SECURITY_DESCRIPTOR;
 use crate::os::windows::security_descriptor::SecurityAttributes;
 
 /// The server for a named pipe, listening for connections to clients and producing pipe streams.
@@ -265,17 +266,14 @@ cannot create pipe server that has byte type but reads messages – have you for
 
 
         if let Some(_) = &self.security_attributes.attributes {
-            let mut security_descriptor = winapi::um::winnt::SECURITY_DESCRIPTOR {
-                Revision: 1,
-                Sbz1: 0,
-                Control: 4,
-                Owner: std::ptr::null_mut(),
-                Group: std::ptr::null_mut(),
-                Sacl: std::ptr::null_mut(),
-                Dacl: std::ptr::null_mut(),
-            };
-            sa.lpSecurityDescriptor = &mut security_descriptor as *mut winapi::um::winnt::SECURITY_DESCRIPTOR as *mut std::ffi::c_void ;
-            let (handle, success) = unsafe {
+            let security_descriptor: winapi::um::winnt::PSECURITY_DESCRIPTOR = init_security_description();
+            unsafe {
+                (*(security_descriptor as *mut winapi::um::winnt::SECURITY_DESCRIPTOR)).Control = 4;
+            }
+            sa.lpSecurityDescriptor = security_descriptor;
+        }
+
+             let (handle, success) = unsafe {
                 let handle = CreateNamedPipeW(
                     path.as_ptr(),
                     open_mode,
@@ -288,52 +286,11 @@ cannot create pipe server that has byte type but reads messages – have you for
                 );
                 (handle, handle != INVALID_HANDLE_VALUE)
             };
-            ok_or_ret_errno!(success => unsafe {
-            // SAFETY: we just made it and received ownership
-            OwnedHandle::from_raw_handle(handle)
-            })
-        } else{
-            let (handle, success) = unsafe {
-                let handle = CreateNamedPipeW(
-                    path.as_ptr(),
-                    open_mode,
-                    pipe_mode,
-                    max_instances,
-                    self.output_buffer_size_hint,
-                    self.input_buffer_size_hint,
-                    self.wait_timeout.get(),
-                    &mut sa,
-                );
-                (handle, handle != INVALID_HANDLE_VALUE)
-            };
+
             ok_or_ret_errno!(success => unsafe {
             // SAFETY: we just made it and received ownership
             OwnedHandle::from_raw_handle(handle)
         })
-        }
-
-
-
-        // } else{
-        //     let (handle, success) = unsafe {
-        //         let handle = CreateNamedPipeW(
-        //             path.as_ptr(),
-        //             open_mode,
-        //             pipe_mode,
-        //             max_instances,
-        //             self.output_buffer_size_hint,
-        //             self.input_buffer_size_hint,
-        //             self.wait_timeout.get(),
-        //             &mut sa as *mut _,
-        //         );
-        //         (handle, handle != INVALID_HANDLE_VALUE)
-        //     };
-        //     ok_or_ret_errno!(success => unsafe {
-        //     // SAFETY: we just made it and received ownership
-        //     OwnedHandle::from_raw_handle(handle)
-        // })
-        // }
-
 
     }
     /// Creates the pipe listener from the builder. The `Rm` and `Sm` generic arguments specify the type of pipe stream that the listener will create, thus determining the direction of the pipe and its mode.
