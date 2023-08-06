@@ -58,9 +58,11 @@ futures = "0.3.28"
 color-eyre = "0.6.2"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = [
+anyhow = "1.0.72"
+winapi = { version = "0.3.9", features = [
     "std",
     "winbase",
+    "minwinbase",
     "winerror",
     "processthreadsapi",
     "fileapi",
@@ -69,6 +71,8 @@ winapi = { version = "0.3", features = [
     "accctrl",
     "securitybaseapi",
     "aclapi",
+    "winnt",
+    "sddl"
 ] }
 
 [target.'cfg(unix)'.dependencies]

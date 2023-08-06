@@ -248,8 +248,8 @@ cannot create pipe server that has byte type but reads messages – have you for
         let open_mode = self.open_mode(first, role, overlapped);
         let pipe_mode = self.pipe_mode(read_mode, nonblocking);
 
-        // let mut sa = init_security_attributes();
-        // sa.bInheritHandle = 0;
+        let mut sa = init_security_attributes();
+        sa.bInheritHandle = 0;
         // // TODO security descriptor
 
         let max_instances = match self.instance_limit.map(NonZeroU8::get) {
@@ -264,9 +264,21 @@ cannot create pipe server that has byte type but reads messages – have you for
         };
 
 
-//        if let Some(descriptor) = self.security_attributes.clone(){
-        let mut sa :SECURITY_ATTRIBUTES = self.security_attributes.clone().into();
-            let (handle, success) = unsafe {
+        if let Some(_) = &self.security_attributes.attributes {
+            let mut security_descriptor = winapi::um::winnt::SECURITY_DESCRIPTOR {
+                Revision: 1,
+                Sbz1: 0,
+                Control: 4,
+                Owner: std::ptr::null_mut(),
+                Group: std::ptr::null_mut(),
+                Sacl: std::ptr::null_mut(),
+                Dacl: std::ptr::null_mut(),
+            };
+            println!("security_attributes: {:?}", self.security_attributes.attributes);
+            sa.lpSecurityDescriptor = &mut security_descriptor as *mut winapi::um::winnt::SECURITY_DESCRIPTOR as *mut std::ffi::c_void ;
+        }
+
+             let (handle, success) = unsafe {
                 let handle = CreateNamedPipeW(
                     path.as_ptr(),
                     open_mode,
@@ -275,10 +287,11 @@ cannot create pipe server that has byte type but reads messages – have you for
                     self.output_buffer_size_hint,
                     self.input_buffer_size_hint,
                     self.wait_timeout.get(),
-                    &mut sa as *mut _,
+                    &mut sa,
                 );
                 (handle, handle != INVALID_HANDLE_VALUE)
             };
+
             ok_or_ret_errno!(success => unsafe {
             // SAFETY: we just made it and received ownership
             OwnedHandle::from_raw_handle(handle)
