@@ -52,40 +52,10 @@ impl Default for SecurityAttributes {
 
 
 impl SecurityAttributes {
-    // pub fn get_descriptor(&self) -> SECURITY_ATTRIBUTES {
-    //     self.clone().into()
-    //     //TODO call crate::c_wrappers::obtain_secure_descriptor()
-    //     let mut security_descriptor: Box<SECURITY_DESCRIPTOR> = Box::new(SECURITY_DESCRIPTOR {
-    //         Revision: 1,
-    //         Sbz1: 0,
-    //         Control: 4,
-    //         Owner: std::ptr::null_mut(),
-    //         Group: std::ptr::null_mut(),
-    //         Sacl: std::ptr::null_mut(),
-    //         Dacl: std::ptr::null_mut(),
-    //     });
-    //
-    //     let mut security_attributes: SECURITY_ATTRIBUTES = SECURITY_ATTRIBUTES {
-    //         nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
-    //         lpSecurityDescriptor: security_descriptor.as_mut() as *mut _ as *mut std::ffi::c_void,
-    //         bInheritHandle: 0, // 0 si no deseas heredar el descriptor
-    //     };
-    //
-    //     security_attributes
-    //}
-    // pub fn any_user() -> Self {
-    //     let mut sa = SecurityAttributes::empty();
-    //
-    //     sa.set_all_users();
-    //
-    //     sa
-    // }
     pub fn any_user(&self) -> Self {
-        let sd = SecurityDescriptor::any_user();
-
         Self {
             n_length: 0,
-            attributes: Some(sd.to_string()),
+            attributes: Some("Everyone".to_string()),
             inherit_handle: 0,
         }
     }
@@ -96,21 +66,7 @@ impl SecurityAttributes {
     pub fn empty() -> SecurityAttributes {
         unsafe { std::mem::zeroed() }
     }
-    // pub fn with_descriptor(descriptor: SecurityDescriptor) -> Self {
-    //     Self {
-    //
-    //         length: 0,
-    //         descriptor: Some(descriptor),
-    //         inherit_handle: 0,
-    //     }
-    // }
 }
-
-// impl Into<SecurityAttributes> for SecurityDescriptor {
-//     fn into(self) -> SecurityAttributes {
-//         SecurityAttributes::with_descriptor(self)
-//     }
-// }
 
 #[repr(C)]
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -142,20 +98,6 @@ impl Clone for SecurityDescriptor {
 
 
 impl SecurityDescriptor {
-    /// Converts the security descriptor into a string representation.
-    ///
-    /// # Returns
-    ///
-    /// A string representation of the security descriptor.
-    pub fn to_string(self) -> String {
-        match SecurityAttributes::as_sddl(self.into()) {
-            Ok(sddl) => {
-                sddl
-            }
-            Err(_) => "".to_string(),
-        }
-    }
-
     pub fn any_user() -> Self {
         Self {
             revision: SECURITY_DESCRIPTOR_REVISION as u8,
@@ -184,6 +126,7 @@ impl Into<SECURITY_DESCRIPTOR> for SecurityDescriptor {
         }
     }
 }
+
 impl Into<*mut c_void> for &SecurityDescriptor {
     fn into(self) -> *mut c_void {
         // Aquí puedes convertir tu SecurityDescriptor en un puntero crudo como sea necesario

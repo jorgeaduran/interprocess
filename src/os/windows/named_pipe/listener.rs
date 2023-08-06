@@ -268,7 +268,7 @@ cannot create pipe server that has byte type but reads messages – have you for
         if let Some(_) = &self.security_attributes.attributes {
             let security_descriptor: winapi::um::winnt::PSECURITY_DESCRIPTOR = init_security_description();
             unsafe {
-                (*(security_descriptor as *mut winapi::um::winnt::SECURITY_DESCRIPTOR)).Control = 4;
+                (*(security_descriptor as *mut SECURITY_DESCRIPTOR)).Control = 4;
             }
             sa.lpSecurityDescriptor = security_descriptor;
         }
