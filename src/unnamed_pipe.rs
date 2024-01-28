@@ -30,9 +30,8 @@ pub fn pipe() -> io::Result<(UnnamedPipeSender, UnnamedPipeRecver)> {
 /// with the [sending end](UnnamedPipeSender).
 ///
 /// The core functionality is exposed in a [`Read`](io::Read) interface. On Windows, the
-/// [`ShareHandle`](crate::os::windows::ShareHandle) and
-/// [`As-`][ARH]/[`Into-`][IRH]/[`FromRawHandle`] traits are also implemented; same for
-/// [`As-`][ARF]/[`Into-`][IRF]/[`FromRawFd`] on Unix.
+/// `ShareHandle` and [`As-`][ARH]/[`Into-`][IRH]/[`FromRawHandle`] traits are also
+/// implemented; same for [`As-`][ARF]/[`Into-`][IRF]/[`FromRawFd`] on Unix.
 ///
 /// [ARH]: https://doc.rust-lang.org/std/os/windows/io/trait.AsRawHandle.html
 /// [IRH]: https://doc.rust-lang.org/std/os/windows/io/trait.IntoRawHandle.html
@@ -55,9 +54,8 @@ multimacro! {
 /// the [receiving end](UnnamedPipeRecver).
 ///
 /// The core functionality is exposed in a [`Write`](io::Write) interface. On Windows, the
-/// [`ShareHandle`](crate::os::windows::ShareHandle) and
-/// [`As-`][ARH]/[`Into-`][IRH]/[`FromRawHandle`] traits are also implemented; same for
-/// [`As-`][ARF]/[`Into-`][IRF]/[`FromRawFd`] on Unix.
+/// `ShareHandle` and [`As-`][ARH]/[`Into-`][IRH]/[`FromRawHandle`] traits are also
+/// implemented; same for [`As-`][ARF]/[`Into-`][IRF]/[`FromRawFd`] on Unix.
 ///
 /// [ARH]: https://doc.rust-lang.org/std/os/windows/io/trait.AsRawHandle.html
 /// [IRH]: https://doc.rust-lang.org/std/os/windows/io/trait.IntoRawHandle.html
