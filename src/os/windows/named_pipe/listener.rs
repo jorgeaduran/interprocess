@@ -25,6 +25,7 @@ use windows_sys::Win32::{
     },
     System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, PIPE_NOWAIT, PIPE_REJECT_REMOTE_CLIENTS},
 };
+use windows_sys::Win32::Security::{SE_DACL_PRESENT, SECURITY_DESCRIPTOR};
 
 // TODO split up
 
@@ -308,6 +309,13 @@ cannot create pipe server that has byte type but receives messages – have you 
         let open_mode = self.open_mode(first, role, overlapped);
         let pipe_mode = self.pipe_mode(recv_mode, nonblocking);
 
+        let mut security_descriptor_ptr: Option<*mut SECURITY_DESCRIPTOR> = None;
+        if let Some(security_descriptor) = &self.security_descriptor {
+            unsafe{
+                (*(security_descriptor.as_ptr() as *mut SECURITY_DESCRIPTOR)).Control = SE_DACL_PRESENT;
+                security_descriptor_ptr = Some(security_descriptor.as_ptr() as *mut SECURITY_DESCRIPTOR);
+            }
+        }
         let sa = SecurityDescriptor::create_security_attributes(
             self.security_descriptor.as_deref(),
             self.inheritable,
@@ -335,6 +343,7 @@ cannot create pipe server that has byte type but receives messages – have you 
             );
             (handle, handle != INVALID_HANDLE_VALUE)
         };
+
         ok_or_ret_errno!(success => unsafe {
             // SAFETY: we just made it and received ownership
             OwnedHandle::from_raw_handle(handle as RawHandle)

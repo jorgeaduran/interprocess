@@ -134,7 +134,7 @@ impl LocalSocketListener {
     /// Like [`bind()`](Self::bind) followed by
     /// [`.do_not_reclaim_name_on_drop()`](Self::do_not_reclaim_name_on_drop), but avoids a memory
     /// allocation.
-    pub fn bind_without_name_reclamation<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
+    pub fn bind_unsafe<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
         LocalSocketListenerImpl::bind(name.to_local_socket_name()?, false).map(Self)
     }
 
