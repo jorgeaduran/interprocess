@@ -22,6 +22,7 @@ use std::io;
 ///
 /// The platform-specific builders in the `os` module of the crate might be more helpful if a
 /// configuration process for the pipe is needed.
+#[inline]
 pub fn pipe() -> io::Result<(UnnamedPipeSender, UnnamedPipeRecver)> {
     pipe_impl()
 }
