@@ -1,14 +1,39 @@
-use std::{borrow::Borrow, ffi::c_void, fmt::Debug};
+use std::{alloc, borrow::Borrow, ffi::c_void, fmt::Debug};
+use std::mem::size_of;
 use windows_sys::Win32::Security::{
-    IsValidSecurityDescriptor, SECURITY_ATTRIBUTES, SECURITY_DESCRIPTOR,
+    InitializeSecurityDescriptor, IsValidSecurityDescriptor, SECURITY_ATTRIBUTES, SECURITY_DESCRIPTOR, PSECURITY_DESCRIPTOR,
 };
+use std::io;
 
+#[cfg(target_pointer_width = "64")]
+pub const SECURITY_DESCRIPTOR_MIN_LENGTH: usize = 40;
+#[cfg(target_pointer_width = "32")]
+pub const SECURITY_DESCRIPTOR_MIN_LENGTH: usize = 20;
 /// A borrowed [security descriptor][sd] which is known to be safe to use.
 ///
 /// [sd]: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-security_descriptor
 #[derive(Copy, Clone)]
 #[repr(transparent)]
 pub struct SecurityDescriptor(SECURITY_DESCRIPTOR);
+
+//impl default
+impl Default for SecurityDescriptor {
+    fn default() -> Self {
+        let mut sd: SECURITY_DESCRIPTOR = unsafe { std::mem::zeroed() };
+        let result = unsafe {
+            InitializeSecurityDescriptor(
+                &mut sd as *mut _ as *mut c_void,// Aquí se hace el casting correcto
+                windows_sys::Win32::System::SystemServices::SECURITY_DESCRIPTOR_REVISION as u32
+            )
+        };
+
+        if result == 0 {
+            panic!("Failed to initialize SECURITY_DESCRIPTOR: {}", io::Error::last_os_error());
+        }
+
+        SecurityDescriptor(sd)
+    }
+}
 impl SecurityDescriptor {
     /// Borrows the given security descriptor.
     ///
@@ -26,6 +51,7 @@ impl SecurityDescriptor {
             ret
         }
     }
+
     /// Casts to the `void*` type seen in `SECURITY_ATTRIBUTES`.
     #[inline]
     pub fn as_ptr(&self) -> *mut c_void {
@@ -49,6 +75,23 @@ impl SecurityDescriptor {
         attrs.bInheritHandle = inheritable as i32;
         attrs
     }
+
+    pub fn init_security_description() -> io::Result<PSECURITY_DESCRIPTOR> {
+        let layout = std::alloc::Layout::from_size_align(size_of::<[u8; SECURITY_DESCRIPTOR_MIN_LENGTH]>() as _, 8).unwrap();
+        let p_sd: PSECURITY_DESCRIPTOR = unsafe { alloc::alloc(layout) as PSECURITY_DESCRIPTOR };
+        println!("need to free p_sd: {:?}", p_sd);
+
+        // Inicializar el descriptor de seguridad
+        let result = unsafe {
+            InitializeSecurityDescriptor(p_sd, windows_sys::Win32::System::SystemServices::SECURITY_DESCRIPTOR_REVISION)
+        };
+        if result == 0 {
+            unsafe { alloc::dealloc(p_sd as *mut u8, layout) };
+            return Err(io::Error::last_os_error());
+        }
+        Ok(p_sd)
+    }
+
 }
 
 unsafe impl Send for SecurityDescriptor {}

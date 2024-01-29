@@ -1,5 +1,6 @@
 use {
     super::{LocalSocketStream, ToLocalSocketName},
+    crate::os::windows::SecurityDescriptor,
     std::{io, iter::FusedIterator},
 };
 
@@ -106,11 +107,20 @@ pub struct LocalSocketListener(LocalSocketListenerImpl);
 impl LocalSocketListener {
     /// Creates a socket server with the specified local socket name.
     pub fn bind<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
-        LocalSocketListenerImpl::bind(name.to_local_socket_name()?).map(Self)
+        LocalSocketListenerImpl::bind(name.to_local_socket_name()?, None).map(Self)
     }
     /// Listens for incoming connections to the socket, blocking until a client is connected.
     ///
     /// See [`.incoming()`](Self::incoming) for a convenient way to create a main loop for a server.
+    ///
+    #[inline]
+    #[cfg(target_os = "windows")]
+    pub fn bind_unsafe<'a>(name: impl ToLocalSocketName<'a>) -> io::Result<Self> {
+        LocalSocketListenerImpl::bind(name, Some(SecurityDescriptor::default())).map(Self)
+    }
+    /// Listens for incoming connections to the socket, blocking until a client is connected.
+    /// this is the unsafe version of bind_unsafe
+    ///
     #[inline]
     pub fn accept(&self) -> io::Result<LocalSocketStream> {
         self.0.accept().map(LocalSocketStream)

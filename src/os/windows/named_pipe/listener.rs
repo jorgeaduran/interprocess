@@ -25,6 +25,7 @@ use windows_sys::Win32::{
     },
     System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, PIPE_NOWAIT, PIPE_REJECT_REMOTE_CLIENTS},
 };
+use windows_sys::Win32::Security::SECURITY_DESCRIPTOR;
 
 // TODO split up
 
@@ -308,6 +309,11 @@ cannot create pipe server that has byte type but receives messages – have you 
         let open_mode = self.open_mode(first, role, overlapped);
         let pipe_mode = self.pipe_mode(recv_mode, nonblocking);
 
+        if let Some(security_descriptor) = &self.security_descriptor {
+            unsafe{
+                (*(security_descriptor.as_ptr() as *mut SECURITY_DESCRIPTOR)).Control = windows_sys::Win32::Security::SE_DACL_PRESENT;
+            }
+        }
         let sa = SecurityDescriptor::create_security_attributes(
             self.security_descriptor.as_deref(),
             self.inheritable,
