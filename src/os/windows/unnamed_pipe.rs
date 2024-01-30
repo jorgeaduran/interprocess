@@ -5,7 +5,7 @@
 
 // TODO add examples
 
-use super::{winprelude::*, FileHandle, SecurityDescriptor};
+use super::{winprelude::*, FileHandle, SecurityAttributes};
 use crate::{
     unnamed_pipe::{UnnamedPipeRecver as PubRecver, UnnamedPipeSender as PubSender},
     weaken_buf_init_mut,
@@ -25,7 +25,7 @@ use windows_sys::Win32::{Security::SECURITY_ATTRIBUTES, System::Pipes::CreatePip
 #[derive(Copy, Clone, Debug)]
 pub struct UnnamedPipeCreationOptions<'a> {
     /// A security descriptor for the pipe.
-    pub security_descriptor: Option<&'a SecurityDescriptor>,
+    pub security_descriptor: Option<&'a SecurityAttributes>,
     /// Specifies whether the resulting pipe can be inherited by child processes.
     ///
     /// The default value is `true`.
@@ -56,7 +56,7 @@ impl<'a> UnnamedPipeCreationOptions<'a> {
     #[inline]
     pub fn security_descriptor(
         mut self,
-        security_descriptor: Option<&'a SecurityDescriptor>,
+        security_descriptor: Option<&'a SecurityAttributes>,
     ) -> Self {
         self.security_descriptor = security_descriptor;
         self
@@ -88,18 +88,14 @@ impl<'a> UnnamedPipeCreationOptions<'a> {
             None => 0,
         } as u32;
 
-        let sd = SecurityDescriptor::create_security_attributes(
-            self.security_descriptor,
-            self.inheritable,
-            self.bind_unsafe,
-        );
+        let sa = SecurityAttributes::default();
 
         let [mut w, mut r] = [INVALID_HANDLE_VALUE; 2];
         let success = unsafe {
             CreatePipe(
                 &mut r,
                 &mut w,
-                (&sd as *const SECURITY_ATTRIBUTES).cast_mut().cast(),
+                sa.as_ptr() as *mut _,
                 hint_raw,
             )
         } != 0;

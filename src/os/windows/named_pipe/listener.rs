@@ -1,7 +1,7 @@
 use super::{
     path_conversion::*, pipe_mode, PipeMode, PipeModeTag, PipeStream, PipeStreamRole, RawPipeStream,
 };
-use crate::os::windows::{winprelude::*, FileHandle, SecurityDescriptor};
+use crate::os::windows::{winprelude::*, FileHandle, SecurityAttributes};
 use std::{
     borrow::Cow,
     fmt::{self, Debug, Formatter},
@@ -19,7 +19,6 @@ use std::{
 use to_method::To;
 use windows_sys::Win32::{
     Foundation::ERROR_PIPE_CONNECTED,
-    Security::SECURITY_ATTRIBUTES,
     Storage::FileSystem::{
         FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED, FILE_FLAG_WRITE_THROUGH,
     },
@@ -190,7 +189,7 @@ pub struct PipeListenerOptions<'a> {
     // TODO use WaitTimeout struct
     pub wait_timeout: NonZeroU32,
     /// The security descriptor to create the named pipe server with.
-    pub security_descriptor: Option<Cow<'a, SecurityDescriptor>>,
+    pub security_descriptor: Option<Cow<'a, SecurityAttributes>>,
     /// Whether the resulting handle is to be inheritable by child processes or not.
     ///
     /// There is little to no reason for this to ever be `true`.
@@ -288,7 +287,7 @@ impl<'a> PipeListenerOptions<'a> {
         input_buffer_size_hint: u32,
         output_buffer_size_hint: u32,
         wait_timeout: NonZeroU32,
-        security_descriptor: Option<Cow<'a, SecurityDescriptor>>,
+        security_descriptor: Option<Cow<'a, SecurityAttributes>>,
         inheritable: bool,
         bind_unsafe: bool,
     }
@@ -316,18 +315,24 @@ cannot create pipe server that has byte type but receives messages – have you 
         let open_mode = self.open_mode(first, role, overlapped);
         let pipe_mode = self.pipe_mode(recv_mode, nonblocking);
 
-        let mut security_descriptor_ptr: Option<*mut SECURITY_DESCRIPTOR> = None;
 
-        let mut sa = SecurityDescriptor::create_security_attributes(
-            self.security_descriptor.as_deref(),
-            self.inheritable,
-            self.bind_unsafe
-        );
+        let mut sa = SecurityAttributes::default();
+        sa.set_inheritable(self.inheritable);
 
-        if let Some(sd) = security_descriptor_ptr {
-            sa.lpSecurityDescriptor = sd as *mut _;
+        if self.bind_unsafe{
+            match sa.init_security_description() {
+                Ok(sd) => {
+                    unsafe{
+                        (*(sd as *mut SECURITY_DESCRIPTOR)).Control = windows_sys::Win32::Security::SE_DACL_PRESENT;
+                    }
+
+                    sa.set_security_descriptor(sd);
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
         }
-
 
         let max_instances = match self.instance_limit.map(NonZeroU8::get) {
             Some(255) => return Err(io::Error::new(
@@ -347,14 +352,12 @@ cannot create pipe server that has byte type but receives messages – have you 
                 self.output_buffer_size_hint,
                 self.input_buffer_size_hint,
                 self.wait_timeout.get(),
-                (&sa as *const SECURITY_ATTRIBUTES).cast_mut().cast(),
+                sa.as_ptr() as *mut _,
             );
             (handle, handle != INVALID_HANDLE_VALUE)
         };
         if self.bind_unsafe {
-            unsafe { std::alloc::dealloc(sa.lpSecurityDescriptor as *mut u8,
-                                         std::alloc::Layout::from_size_align(
-                                             std::mem::size_of::<SECURITY_DESCRIPTOR>() as _, 8).unwrap()) };
+            sa.free_security_descriptor();
         }
         ok_or_ret_errno!(success => unsafe {
             // SAFETY: we just made it and received ownership
