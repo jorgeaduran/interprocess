@@ -34,6 +34,10 @@ pub struct UnnamedPipeCreationOptions<'a> {
     /// actually uses this exact size, since it's only a hint. Set to `None` to disable the hint and
     /// rely entirely on the system's default buffer size.
     pub buffer_size_hint: Option<NonZeroUsize>,
+    /// Specifies whether the resulting pipe can be connected to by other processes.
+    ///
+    /// The default value is `false`.
+    pub bind_unsafe: bool,
 }
 impl<'a> UnnamedPipeCreationOptions<'a> {
     /// Starts with the default parameters for the pipe. Identical to `Default::default()`.
@@ -42,6 +46,7 @@ impl<'a> UnnamedPipeCreationOptions<'a> {
             inheritable: false,
             security_descriptor: None,
             buffer_size_hint: None,
+            bind_unsafe: false,
         }
     }
     /// Specifies the pointer to the security descriptor for the pipe.
@@ -86,6 +91,7 @@ impl<'a> UnnamedPipeCreationOptions<'a> {
         let sd = SecurityDescriptor::create_security_attributes(
             self.security_descriptor,
             self.inheritable,
+            self.bind_unsafe,
         );
 
         let [mut w, mut r] = [INVALID_HANDLE_VALUE; 2];

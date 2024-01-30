@@ -1,8 +1,10 @@
 use std::{alloc, borrow::Borrow, ffi::c_void, fmt::Debug, io};
 use std::mem::size_of;
 use windows_sys::Win32::Security::{InitializeSecurityDescriptor, IsValidSecurityDescriptor, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, SECURITY_DESCRIPTOR};
+/// Size in bytes of a minimal security descriptor on a 64-bit system.
 #[cfg(target_pointer_width = "64")]
 pub const SECURITY_DESCRIPTOR_MIN_LENGTH: usize = 40;
+/// Size in bytes of a minimal security descriptor on a 32-bit system.
 #[cfg(target_pointer_width = "32")]
 pub const SECURITY_DESCRIPTOR_MIN_LENGTH: usize = 20;
 /// A borrowed [security descriptor][sd] which is known to be safe to use.
@@ -12,6 +14,7 @@ pub const SECURITY_DESCRIPTOR_MIN_LENGTH: usize = 20;
 #[repr(transparent)]
 pub struct SecurityDescriptor(SECURITY_DESCRIPTOR);
 impl Default for SecurityDescriptor {
+    // Default implementation for creating a new `SecurityDescriptor`.
     fn default() -> Self {
         let mut sd: SECURITY_DESCRIPTOR = unsafe { std::mem::zeroed() };
         let result = unsafe {
@@ -57,11 +60,26 @@ impl SecurityDescriptor {
         attributes.lpSecurityDescriptor = self.as_ptr();
     }
 
+    /// Creates a `SECURITY_ATTRIBUTES` structure, optionally including this security descriptor.
+    ///
+    /// This helper function is used for initializing `SECURITY_ATTRIBUTES` for Windows API calls,
+    /// allowing for an optional inclusion of a security descriptor and handle inheritance flag.
     pub(super) fn create_security_attributes(
         slf: Option<&Self>,
         inheritable: bool,
+        bind_unsafe: bool,
     ) -> SECURITY_ATTRIBUTES {
         let mut attrs = unsafe { std::mem::zeroed::<SECURITY_ATTRIBUTES>() };
+        if !bind_unsafe {
+            match SecurityDescriptor::init_security_description() {
+                Ok(p_sd) => {
+                    attrs.lpSecurityDescriptor = p_sd as *mut _;
+                }
+                Err(e) => {
+                    panic!("Failed to initialize SECURITY_DESCRIPTOR: {}", e);
+                }
+            }
+        }
         if let Some(slf) = slf {
             slf.write_to_security_attributes(&mut attrs);
         }
@@ -70,6 +88,10 @@ impl SecurityDescriptor {
         attrs
     }
 
+    /// Initializes and returns a new `SECURITY_DESCRIPTOR`.
+    ///
+    /// This function allocates and initializes a new `SECURITY_DESCRIPTOR`.
+    /// It returns a pointer to the descriptor, wrapped in a `Result` to handle any errors.
     pub fn init_security_description() -> io::Result<PSECURITY_DESCRIPTOR> {
         let layout = std::alloc::Layout::from_size_align(size_of::<[u8; SECURITY_DESCRIPTOR_MIN_LENGTH]>() as _, 8).unwrap();
         let p_sd: PSECURITY_DESCRIPTOR = unsafe { alloc::alloc(layout) as PSECURITY_DESCRIPTOR };

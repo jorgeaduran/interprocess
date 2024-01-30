@@ -25,7 +25,7 @@ use windows_sys::Win32::{
     },
     System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, PIPE_NOWAIT, PIPE_REJECT_REMOTE_CLIENTS},
 };
-use windows_sys::Win32::Security::{SE_DACL_PRESENT, SECURITY_DESCRIPTOR};
+use windows_sys::Win32::Security::{SECURITY_DESCRIPTOR};
 
 // TODO split up
 
@@ -195,8 +195,9 @@ pub struct PipeListenerOptions<'a> {
     ///
     /// There is little to no reason for this to ever be `true`.
     pub inheritable: bool,
+    /// Specifies whether the resulting pipe can be connected to by other processes.
     ///
-    ///
+    /// The default value is `false`.
     pub bind_unsafe: bool,
 }
 macro_rules! genset {
@@ -317,29 +318,14 @@ cannot create pipe server that has byte type but receives messages – have you 
 
         let mut security_descriptor_ptr: Option<*mut SECURITY_DESCRIPTOR> = None;
 
-        if self.bind_unsafe {
-            match SecurityDescriptor::init_security_description() {
-                Ok(sd) => {
-                    unsafe{
-                        (*(sd as *mut SECURITY_DESCRIPTOR)).Control = windows_sys::Win32::Security::SE_DACL_PRESENT;
-                        security_descriptor_ptr = Some(sd as *mut SECURITY_DESCRIPTOR);
-                    }
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
-
         let mut sa = SecurityDescriptor::create_security_attributes(
             self.security_descriptor.as_deref(),
             self.inheritable,
+            self.bind_unsafe
         );
 
         if let Some(sd) = security_descriptor_ptr {
-            unsafe{
-                sa.lpSecurityDescriptor = sd as *mut _;
-            }
+            sa.lpSecurityDescriptor = sd as *mut _;
         }
 
 

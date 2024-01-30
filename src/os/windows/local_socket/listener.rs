@@ -9,9 +9,6 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
-use std::mem::size_of;
-use windows_sys::Win32::Security::{SE_DACL_PRESENT, SECURITY_DESCRIPTOR};
-use crate::os::windows::SecurityDescriptor;
 
 type PipeListener = GenericPipeListener<Bytes, Bytes>;
 
