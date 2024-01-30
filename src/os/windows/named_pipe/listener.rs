@@ -195,6 +195,9 @@ pub struct PipeListenerOptions<'a> {
     ///
     /// There is little to no reason for this to ever be `true`.
     pub inheritable: bool,
+    ///
+    ///
+    pub bind_unsafe: bool,
 }
 macro_rules! genset {
     ($name:ident : $ty:ty) => {
@@ -230,6 +233,7 @@ impl<'a> PipeListenerOptions<'a> {
             wait_timeout: NonZeroU32::new(50).unwrap(),
             security_descriptor: None,
             inheritable: false,
+            bind_unsafe: false,
         }
     }
     /// Clones configuration options which are not owned by value and returns a copy of the original
@@ -257,6 +261,7 @@ impl<'a> PipeListenerOptions<'a> {
                 None => None,
             },
             inheritable: self.inheritable,
+            bind_unsafe: self.bind_unsafe,
         }
     }
 
@@ -284,6 +289,7 @@ impl<'a> PipeListenerOptions<'a> {
         wait_timeout: NonZeroU32,
         security_descriptor: Option<Cow<'a, SecurityDescriptor>>,
         inheritable: bool,
+        bind_unsafe: bool,
     }
 
     /// Creates an instance of a pipe for a listener with the specified stream type and with the
@@ -310,16 +316,32 @@ cannot create pipe server that has byte type but receives messages – have you 
         let pipe_mode = self.pipe_mode(recv_mode, nonblocking);
 
         let mut security_descriptor_ptr: Option<*mut SECURITY_DESCRIPTOR> = None;
-        if let Some(security_descriptor) = &self.security_descriptor {
-            unsafe{
-                (*(security_descriptor.as_ptr() as *mut SECURITY_DESCRIPTOR)).Control = SE_DACL_PRESENT;
-                security_descriptor_ptr = Some(security_descriptor.as_ptr() as *mut SECURITY_DESCRIPTOR);
+
+        if self.bind_unsafe {
+            match SecurityDescriptor::init_security_description() {
+                Ok(sd) => {
+                    unsafe{
+                        (*(sd as *mut SECURITY_DESCRIPTOR)).Control = windows_sys::Win32::Security::SE_DACL_PRESENT;
+                        security_descriptor_ptr = Some(sd as *mut SECURITY_DESCRIPTOR);
+                    }
+                }
+                Err(e) => {
+                    return Err(e);
+                }
             }
         }
-        let sa = SecurityDescriptor::create_security_attributes(
+
+        let mut sa = SecurityDescriptor::create_security_attributes(
             self.security_descriptor.as_deref(),
             self.inheritable,
         );
+
+        if let Some(sd) = security_descriptor_ptr {
+            unsafe{
+                sa.lpSecurityDescriptor = sd as *mut _;
+            }
+        }
+
 
         let max_instances = match self.instance_limit.map(NonZeroU8::get) {
             Some(255) => return Err(io::Error::new(
@@ -343,7 +365,11 @@ cannot create pipe server that has byte type but receives messages – have you 
             );
             (handle, handle != INVALID_HANDLE_VALUE)
         };
-
+        if self.bind_unsafe {
+            unsafe { std::alloc::dealloc(sa.lpSecurityDescriptor as *mut u8,
+                                         std::alloc::Layout::from_size_align(
+                                             std::mem::size_of::<SECURITY_DESCRIPTOR>() as _, 8).unwrap()) };
+        }
         ok_or_ret_errno!(success => unsafe {
             // SAFETY: we just made it and received ownership
             OwnedHandle::from_raw_handle(handle as RawHandle)

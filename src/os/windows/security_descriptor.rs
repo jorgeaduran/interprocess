@@ -70,13 +70,10 @@ impl SecurityDescriptor {
         attrs
     }
 
-
     pub fn init_security_description() -> io::Result<PSECURITY_DESCRIPTOR> {
         let layout = std::alloc::Layout::from_size_align(size_of::<[u8; SECURITY_DESCRIPTOR_MIN_LENGTH]>() as _, 8).unwrap();
         let p_sd: PSECURITY_DESCRIPTOR = unsafe { alloc::alloc(layout) as PSECURITY_DESCRIPTOR };
-        println!("need to free p_sd: {:?}", p_sd);
 
-        // Inicializar el descriptor de seguridad
         let result = unsafe {
             InitializeSecurityDescriptor(p_sd, windows_sys::Win32::System::SystemServices::SECURITY_DESCRIPTOR_REVISION)
         };
