@@ -5,7 +5,7 @@
 
 // TODO add examples
 
-use super::{winprelude::*, FileHandle, SecurityDescriptor};
+use super::{winprelude::*, FileHandle, SecurityAttributes};
 use crate::{
     unnamed_pipe::{UnnamedPipeRecver as PubRecver, UnnamedPipeSender as PubSender},
     weaken_buf_init_mut,
@@ -25,7 +25,7 @@ use windows_sys::Win32::{Security::SECURITY_ATTRIBUTES, System::Pipes::CreatePip
 #[derive(Copy, Clone, Debug)]
 pub struct UnnamedPipeCreationOptions<'a> {
     /// A security descriptor for the pipe.
-    pub security_descriptor: Option<&'a SecurityDescriptor>,
+    pub security_descriptor: Option<&'a SecurityAttributes>,
     /// Specifies whether the resulting pipe can be inherited by child processes.
     ///
     /// The default value is `true`.
@@ -34,6 +34,10 @@ pub struct UnnamedPipeCreationOptions<'a> {
     /// actually uses this exact size, since it's only a hint. Set to `None` to disable the hint and
     /// rely entirely on the system's default buffer size.
     pub buffer_size_hint: Option<NonZeroUsize>,
+    /// Specifies whether the resulting pipe can be connected to by other processes.
+    ///
+    /// The default value is `false`.
+    pub bind_unsafe: bool,
 }
 impl<'a> UnnamedPipeCreationOptions<'a> {
     /// Starts with the default parameters for the pipe. Identical to `Default::default()`.
@@ -42,6 +46,7 @@ impl<'a> UnnamedPipeCreationOptions<'a> {
             inheritable: false,
             security_descriptor: None,
             buffer_size_hint: None,
+            bind_unsafe: false,
         }
     }
     /// Specifies the pointer to the security descriptor for the pipe.
@@ -51,7 +56,7 @@ impl<'a> UnnamedPipeCreationOptions<'a> {
     #[inline]
     pub fn security_descriptor(
         mut self,
-        security_descriptor: Option<&'a SecurityDescriptor>,
+        security_descriptor: Option<&'a SecurityAttributes>,
     ) -> Self {
         self.security_descriptor = security_descriptor;
         self
@@ -83,17 +88,14 @@ impl<'a> UnnamedPipeCreationOptions<'a> {
             None => 0,
         } as u32;
 
-        let sd = SecurityDescriptor::create_security_attributes(
-            self.security_descriptor,
-            self.inheritable,
-        );
+        let sa = SecurityAttributes::default();
 
         let [mut w, mut r] = [INVALID_HANDLE_VALUE; 2];
         let success = unsafe {
             CreatePipe(
                 &mut r,
                 &mut w,
-                (&sd as *const SECURITY_ATTRIBUTES).cast_mut().cast(),
+                sa.as_ptr() as *mut _,
                 hint_raw,
             )
         } != 0;

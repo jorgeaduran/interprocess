@@ -9,8 +9,6 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
-use windows_sys::Win32::Security::{SE_DACL_PRESENT, SECURITY_DESCRIPTOR};
-use crate::os::windows::SecurityDescriptor;
 
 type PipeListener = GenericPipeListener<Bytes, Bytes>;
 
@@ -31,12 +29,7 @@ impl LocalSocketListener {
             path.into()
         };
         if !bind_unsafe{
-            let mut sd = SecurityDescriptor::default();
-            unsafe{
-                (*(sd.as_ptr() as *mut SECURITY_DESCRIPTOR)).Control = SE_DACL_PRESENT;
-            }
-            options.security_descriptor = Some(std::borrow::Cow::Owned(sd));
-
+            options.bind_unsafe = true;
         }
         options.create().map(Self)
     }

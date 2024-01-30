@@ -1,8 +1,10 @@
 use std::{alloc, borrow::Borrow, ffi::c_void, fmt::Debug, io};
-use std::mem::size_of;
+use std::mem::{size_of, zeroed};
 use windows_sys::Win32::Security::{InitializeSecurityDescriptor, IsValidSecurityDescriptor, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, SECURITY_DESCRIPTOR};
+/// Size in bytes of a minimal security descriptor on a 64-bit system.
 #[cfg(target_pointer_width = "64")]
 pub const SECURITY_DESCRIPTOR_MIN_LENGTH: usize = 40;
+/// Size in bytes of a minimal security descriptor on a 32-bit system.
 #[cfg(target_pointer_width = "32")]
 pub const SECURITY_DESCRIPTOR_MIN_LENGTH: usize = 20;
 /// A borrowed [security descriptor][sd] which is known to be safe to use.
@@ -10,26 +12,23 @@ pub const SECURITY_DESCRIPTOR_MIN_LENGTH: usize = 20;
 /// [sd]: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-security_descriptor
 #[derive(Copy, Clone)]
 #[repr(transparent)]
-pub struct SecurityDescriptor(SECURITY_DESCRIPTOR);
-impl Default for SecurityDescriptor {
+pub struct SecurityAttributes(SECURITY_ATTRIBUTES);
+impl Default for SecurityAttributes {
+    // Default implementation for creating a new `SecurityDescriptor`.
     fn default() -> Self {
-        let mut sd: SECURITY_DESCRIPTOR = unsafe { std::mem::zeroed() };
-        let result = unsafe {
-            InitializeSecurityDescriptor(
-                &mut sd as *mut _ as *mut c_void,//
-                windows_sys::Win32::System::SystemServices::SECURITY_DESCRIPTOR_REVISION
-            )
-        };
-
-        if result == 0 {
-            unsafe { alloc::dealloc(&mut sd as *mut _ as *mut u8, std::alloc::Layout::new::<SECURITY_DESCRIPTOR>()) };
-            panic!("Failed to initialize SECURITY_DESCRIPTOR: {}", io::Error::last_os_error());
-        }
-
-        SecurityDescriptor(sd)
+        let mut sd = SecurityAttributes::new();
+        sd.set_inheritable(false);
+        sd
     }
 }
-impl SecurityDescriptor {
+impl SecurityAttributes {
+    /// Creates a new `SecurityAttributes` structure.
+    /// The `SECURITY_DESCRIPTOR` structure is initialized to a default empty state.
+    pub fn new() -> Self {
+        let mut sa: SECURITY_ATTRIBUTES = unsafe { zeroed() };
+        sa.nLength = size_of::<SECURITY_ATTRIBUTES>() as _;
+        SecurityAttributes(sa)
+    }
     /// Borrows the given security descriptor.
     ///
     /// # Safety
@@ -53,32 +52,33 @@ impl SecurityDescriptor {
     }
     /// Sets the security descriptor pointer of the given `SECURITY_ATTRIBUTES` structure to the
     /// security descriptor borrow of `self`.
-    pub fn write_to_security_attributes(&self, attributes: &mut SECURITY_ATTRIBUTES) {
-        attributes.lpSecurityDescriptor = self.as_ptr();
+    pub fn set_security_descriptor(&mut self, sd: *mut c_void) {
+        self.0.lpSecurityDescriptor = sd;
     }
 
-    pub(super) fn create_security_attributes(
-        slf: Option<&Self>,
-        inheritable: bool,
-    ) -> SECURITY_ATTRIBUTES {
-        let mut attrs = unsafe { std::mem::zeroed::<SECURITY_ATTRIBUTES>() };
-        if let Some(slf) = slf {
-            slf.write_to_security_attributes(&mut attrs);
+    /// Sets whether the handle created from this `SECURITY_ATTRIBUTES` structure is inheritable.
+    pub fn set_inheritable(&mut self, inheritable: bool) {
+        self.0.bInheritHandle = inheritable as i32;
+    }
+
+    /// deallocates the security descriptor
+    pub fn free_security_descriptor(&mut self) {
+        unsafe {
+            alloc::dealloc(self.0.lpSecurityDescriptor as *mut u8, alloc::Layout::new::<SECURITY_DESCRIPTOR>());
         }
-        attrs.nLength = std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32;
-        attrs.bInheritHandle = inheritable as i32;
-        attrs
     }
 
-
-    pub fn init_security_description() -> io::Result<PSECURITY_DESCRIPTOR> {
-        let layout = std::alloc::Layout::from_size_align(size_of::<[u8; SECURITY_DESCRIPTOR_MIN_LENGTH]>() as _, 8).unwrap();
+    /// Initializes the security descriptor and returns a pointer to it.
+    /// The caller is responsible for deallocating the memory.
+    pub fn init_security_description(&self) -> io::Result<*mut c_void> {
+        let layout = alloc::Layout::from_size_align(size_of::<[u8; SECURITY_DESCRIPTOR_MIN_LENGTH]>() as _, 8).unwrap();
         let p_sd: PSECURITY_DESCRIPTOR = unsafe { alloc::alloc(layout) as PSECURITY_DESCRIPTOR };
-        println!("need to free p_sd: {:?}", p_sd);
 
-        // Inicializar el descriptor de seguridad
         let result = unsafe {
-            InitializeSecurityDescriptor(p_sd, windows_sys::Win32::System::SystemServices::SECURITY_DESCRIPTOR_REVISION)
+            InitializeSecurityDescriptor(
+                p_sd,
+                windows_sys::Win32::System::SystemServices::SECURITY_DESCRIPTOR_REVISION,
+            )
         };
         if result == 0 {
             unsafe { alloc::dealloc(p_sd as *mut u8, layout) };
@@ -88,32 +88,28 @@ impl SecurityDescriptor {
     }
 }
 
-unsafe impl Send for SecurityDescriptor {}
-unsafe impl Sync for SecurityDescriptor {}
+unsafe impl Send for SecurityAttributes {}
+unsafe impl Sync for SecurityAttributes {}
 
-impl Borrow<SECURITY_DESCRIPTOR> for SecurityDescriptor {
+impl Borrow<SECURITY_ATTRIBUTES> for SecurityAttributes {
     #[inline]
-    fn borrow(&self) -> &SECURITY_DESCRIPTOR {
+    fn borrow(&self) -> &SECURITY_ATTRIBUTES {
         &self.0
     }
 }
-impl AsRef<SECURITY_DESCRIPTOR> for SecurityDescriptor {
+impl AsRef<SECURITY_ATTRIBUTES> for SecurityAttributes {
     #[inline]
-    fn as_ref(&self) -> &SECURITY_DESCRIPTOR {
+    fn as_ref(&self) -> &SECURITY_ATTRIBUTES {
         &self.0
     }
 }
 
-impl Debug for SecurityDescriptor {
+impl Debug for SecurityAttributes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("SecurityDescriptor")
-            .field(&self.0.Revision)
-            .field(&self.0.Sbz1)
-            .field(&self.0.Control)
-            .field(&self.0.Owner)
-            .field(&self.0.Group)
-            .field(&self.0.Sacl)
-            .field(&self.0.Dacl)
+        f.debug_struct("SecurityAttributes")
+            .field("nLength", &self.0.nLength)
+            .field("lpSecurityDescriptor", &self.0.lpSecurityDescriptor)
+            .field("bInheritHandle", &self.0.bInheritHandle)
             .finish()
     }
 }

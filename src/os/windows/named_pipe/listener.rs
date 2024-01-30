@@ -1,7 +1,7 @@
 use super::{
     path_conversion::*, pipe_mode, PipeMode, PipeModeTag, PipeStream, PipeStreamRole, RawPipeStream,
 };
-use crate::os::windows::{winprelude::*, FileHandle, SecurityDescriptor};
+use crate::os::windows::{winprelude::*, FileHandle, SecurityAttributes};
 use std::{
     borrow::Cow,
     fmt::{self, Debug, Formatter},
@@ -19,13 +19,12 @@ use std::{
 use to_method::To;
 use windows_sys::Win32::{
     Foundation::ERROR_PIPE_CONNECTED,
-    Security::SECURITY_ATTRIBUTES,
     Storage::FileSystem::{
         FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED, FILE_FLAG_WRITE_THROUGH,
     },
     System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, PIPE_NOWAIT, PIPE_REJECT_REMOTE_CLIENTS},
 };
-use windows_sys::Win32::Security::{SE_DACL_PRESENT, SECURITY_DESCRIPTOR};
+use windows_sys::Win32::Security::{SECURITY_DESCRIPTOR};
 
 // TODO split up
 
@@ -190,11 +189,15 @@ pub struct PipeListenerOptions<'a> {
     // TODO use WaitTimeout struct
     pub wait_timeout: NonZeroU32,
     /// The security descriptor to create the named pipe server with.
-    pub security_descriptor: Option<Cow<'a, SecurityDescriptor>>,
+    pub security_descriptor: Option<Cow<'a, SecurityAttributes>>,
     /// Whether the resulting handle is to be inheritable by child processes or not.
     ///
     /// There is little to no reason for this to ever be `true`.
     pub inheritable: bool,
+    /// Specifies whether the resulting pipe can be connected to by other processes.
+    ///
+    /// The default value is `false`.
+    pub bind_unsafe: bool,
 }
 macro_rules! genset {
     ($name:ident : $ty:ty) => {
@@ -230,6 +233,7 @@ impl<'a> PipeListenerOptions<'a> {
             wait_timeout: NonZeroU32::new(50).unwrap(),
             security_descriptor: None,
             inheritable: false,
+            bind_unsafe: false,
         }
     }
     /// Clones configuration options which are not owned by value and returns a copy of the original
@@ -257,6 +261,7 @@ impl<'a> PipeListenerOptions<'a> {
                 None => None,
             },
             inheritable: self.inheritable,
+            bind_unsafe: self.bind_unsafe,
         }
     }
 
@@ -282,8 +287,9 @@ impl<'a> PipeListenerOptions<'a> {
         input_buffer_size_hint: u32,
         output_buffer_size_hint: u32,
         wait_timeout: NonZeroU32,
-        security_descriptor: Option<Cow<'a, SecurityDescriptor>>,
+        security_descriptor: Option<Cow<'a, SecurityAttributes>>,
         inheritable: bool,
+        bind_unsafe: bool,
     }
 
     /// Creates an instance of a pipe for a listener with the specified stream type and with the
@@ -309,17 +315,24 @@ cannot create pipe server that has byte type but receives messages – have you 
         let open_mode = self.open_mode(first, role, overlapped);
         let pipe_mode = self.pipe_mode(recv_mode, nonblocking);
 
-        let mut security_descriptor_ptr: Option<*mut SECURITY_DESCRIPTOR> = None;
-        if let Some(security_descriptor) = &self.security_descriptor {
-            unsafe{
-                (*(security_descriptor.as_ptr() as *mut SECURITY_DESCRIPTOR)).Control = SE_DACL_PRESENT;
-                security_descriptor_ptr = Some(security_descriptor.as_ptr() as *mut SECURITY_DESCRIPTOR);
+
+        let mut sa = SecurityAttributes::default();
+        sa.set_inheritable(self.inheritable);
+
+        if self.bind_unsafe{
+            match sa.init_security_description() {
+                Ok(sd) => {
+                    unsafe{
+                        (*(sd as *mut SECURITY_DESCRIPTOR)).Control = windows_sys::Win32::Security::SE_DACL_PRESENT;
+                    }
+
+                    sa.set_security_descriptor(sd);
+                }
+                Err(e) => {
+                    return Err(e);
+                }
             }
         }
-        let sa = SecurityDescriptor::create_security_attributes(
-            self.security_descriptor.as_deref(),
-            self.inheritable,
-        );
 
         let max_instances = match self.instance_limit.map(NonZeroU8::get) {
             Some(255) => return Err(io::Error::new(
@@ -339,11 +352,13 @@ cannot create pipe server that has byte type but receives messages – have you 
                 self.output_buffer_size_hint,
                 self.input_buffer_size_hint,
                 self.wait_timeout.get(),
-                (&sa as *const SECURITY_ATTRIBUTES).cast_mut().cast(),
+                sa.as_ptr() as *mut _,
             );
             (handle, handle != INVALID_HANDLE_VALUE)
         };
-
+        if self.bind_unsafe {
+            sa.free_security_descriptor();
+        }
         ok_or_ret_errno!(success => unsafe {
             // SAFETY: we just made it and received ownership
             OwnedHandle::from_raw_handle(handle as RawHandle)
